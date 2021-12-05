@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { MongoClient } = require("mongodb");
-
+const _ = require('lodash');
 let client;
 let db;
 
@@ -15,7 +15,9 @@ const getDb = async () => {
 };
 
 const bulkOps = [];
-const insertLine = (book, bookContext, sequence ) => {
+const insertLine = (book, bookContext, context ) => {
+    const queryFormat = convertToQueryFormat(context, 'context');
+    console.log(book, bookContext, queryFormat);
     bulkOps.push({
         updateOne: {
             filter: {
@@ -23,9 +25,7 @@ const insertLine = (book, bookContext, sequence ) => {
                 bookContext
             },
             update: {
-                $set: { 
-                    sequence
-                }                
+                $set: queryFormat                
             }
         } 
     });
@@ -71,6 +71,25 @@ const writeToDB = async () => {
     client.close();
 };
 
+const convertToQueryFormat = (context, root) => {
+    const keys = _.keys(context);
+    const query = keys.reduce((prev, cur) => {
+        prev[`${root}.${cur}`] = context[cur];
+        return prev;
+    }, {});
+    return query;
+};
+
+
+const extractBookContext = (bookContext) => {
+    const context = bookContext.split('.');
+    const levels = context.reduce((prev,cur,index) => {
+        prev[`L${index+1}`] = +cur;
+        return prev;
+    },{});
+    return levels;    
+};
+
 const getBookAndContext = async () =>{
     const db = await getDb();
     const all = await db.collection('lines').find({},{projection: {book: 1, bookContext: 1}}).toArray();
@@ -83,13 +102,13 @@ const run = async () => {
     let i = 0;
     while( i < lines.length) {
         const line = lines[i];
-        const seq = extractSequence(line.bookContext);
-        console.log(seq, line.bookContext);
-        insertLine(line.book, line.bookContext, seq);
+        const context = extractBookContext(line.bookContext);
+        // console.log(context, line.bookContext);
+        insertLine(line.book, line.bookContext, context);
         i++;
     }
     console.log('Analysis complete - inserting', bulkOps.length);
-    // await writeToDB();    
+    await writeToDB();    
 };
 
 run();
