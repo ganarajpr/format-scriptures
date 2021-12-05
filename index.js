@@ -1,7 +1,6 @@
 require('dotenv').config();
 const { MongoClient } = require("mongodb");
 const fs = require("fs");
-const util = require("util");
 const _ = require('lodash');
 let client;
 let db;
@@ -83,9 +82,9 @@ const writeToDB = async () => {
 
 const getBookContext = (ctx) => {
     try {
-        let final = ctx.replace(/\/\/\s*bndp_/gi, '');
-        final = final.replace(',', '.');
-        final = final.replace(/\s*\/\/.*/, '');
+        let final = ctx.replace(/\[/g, '');
+        final = final.replace(/\]/g, '');
+        final = final.trim();
         return final;
     } catch(e) {
         console.log('Error context is :',ctx);
@@ -94,7 +93,7 @@ const getBookContext = (ctx) => {
 }
 
 const getVerse = (line) => {
-    let vrs = line.replace('/', '\n');
+    let vrs = line.replace('|', '\n');
     return vrs;
 };
 
@@ -108,14 +107,16 @@ const convertToContextLevels = (bookContext) => {
 };
 
 const extractBookContext = (line) => {
-    const matches = line.match(/\/\/.*/);
+    const matches = line.match(/^[0-9]*\..*/);
     let ctx = null;
+    let verse = null;
     if(matches) {
         ctx = getBookContext(matches[0]);
+    } else {
+        verse = getVerse(line);
     }
-    const verse = getVerse(line.replace(/\/.*/, ''));
     if(ctx && !/^(\d+\.)+\d+$/.test(ctx)) {
-        throw Error('Book Context is not in proper format ' + ctx + ' ' + ctx);
+        throw Error('Book Context is not in proper format ' + ctx + ' ' + matches[0]);
     }
     return {
         ctx,
@@ -129,12 +130,7 @@ const extractTextFileContents = (file) => {
 };
 
 
-
-
-const run = async () => {
-    const book ='brahmANDapurANa';
-    const lines = extractTextFileContents('./brahmANDapurANa.txt');
-    console.log('lines', lines.length);
+const onContextAtEnd = (book, lines) =>{
     let i = 0;
     const data = [];
     let curContext = null;
@@ -155,10 +151,61 @@ const run = async () => {
             console.log(segment);
             insertLine(book, curContext, segment);
             data.length = 0;
-            
         }
         i++;
     }
+};
+
+const onContextAtBeginning = (book, lines) =>{
+    let i = 0;
+    const data = [];
+    let curContext = null;
+    while( i < lines.length) {
+        const line = lines[i].trim();
+        if(line.length === 0 || /^(\d+\.)+$/.test(line)) {
+            console.log('continuing since ', line);
+            i++;
+            continue;
+        }
+        const { ctx, verse } = extractBookContext(line);
+        if(ctx == null) {
+            data.push(verse);
+        } else {
+            if(curContext === null) {
+                curContext = ctx;    
+            }            
+            if(curContext !== ctx) {
+                if(!data.length) {
+                    throw new Error('no verse for', curContext);
+                }
+                const segment = Sanscript.t(data.join('\n'), 'iast', 'devanagari');
+                insertLine(book, curContext, segment);
+                console.log(curContext);
+                console.log(segment);
+                data.length = 0;
+                curContext = ctx;
+            }
+            if(verse) {
+                data.push(verse);
+            }            
+        }
+        i++;
+    }
+
+    if(data.length) {
+        const segment = Sanscript.t(data.join('\n'), 'iast', 'devanagari');
+        insertLine(book, curContext, segment);
+        console.log(curContext);
+        console.log(segment);
+    }
+};
+
+const run = async () => {
+    const book ='zatapata brAhmaNa';
+    const lines = extractTextFileContents('./sb14.txt');
+    console.log('lines', lines.length);
+    // onContextAtEnd(book, lines);
+    onContextAtBeginning(book, lines);
     console.log('Analysis complete - inserting', bulkOps.length);
     await writeToDB();    
 };
