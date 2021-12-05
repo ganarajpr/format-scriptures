@@ -1,0 +1,19 @@
+{
+  "name": "format-scriptures",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@sanskrit-coders/sanscript": "^1.2.0",
+    "dotenv": "^10.0.0",
+    "lazy": "^1.0.11",
+    "lodash": "^4.17.21",
+    "mongo-bulk-writable": "github:graingerglobalonline/mongo-bulk-writable",
+    "mongodb": "^4.2.0"
+  }
+}
